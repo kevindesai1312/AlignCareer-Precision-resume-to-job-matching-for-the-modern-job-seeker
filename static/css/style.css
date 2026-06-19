@@ -91,7 +91,9 @@ h1 {
 .highlight {
     background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
+    color: transparent;
 }
 
 header p {
@@ -103,7 +105,7 @@ header p {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 2rem;
-    align-items: stretch;
+    align-items: start;
 }
 
 @media (max-width: 900px) {
@@ -364,13 +366,21 @@ select option {
     cursor: not-allowed;
 }
 
+.output-panel {
+    position: sticky;
+    top: 2rem;
+    max-height: calc(100vh - 4rem);
+    display: flex;
+    flex-direction: column;
+}
+
 .result-content {
     font-size: 1.05rem;
     line-height: 1.6;
     color: var(--text-primary);
     white-space: pre-wrap;
-    min-height: 400px;
-    max-height: 600px;
+    min-height: 200px;
+    flex: 1;
     overflow-y: auto;
     padding-right: 1rem;
 }
@@ -463,11 +473,176 @@ select option {
 
 /* Placeholder Highlighting */
 .highlight-placeholder {
-    background-color: #fde047;
-    color: #1f2937;
-    font-weight: 700;
+    background-color: rgba(253, 224, 71, 0.15);
+    color: #fde047;
+    font-weight: 600;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: 6px;
+    border: 1px dashed #fde047;
+    box-shadow: none;
+    transition: all 0.2s ease;
+    margin: 0 2px;
+    display: inline-block;
+    min-width: 50px;
+    cursor: text;
+}
+
+.highlight-placeholder:focus {
+    background-color: rgba(253, 224, 71, 0.25);
+    border-color: #fde047;
+    border-style: solid;
+    outline: none;
     box-shadow: 0 0 8px rgba(253, 224, 71, 0.4);
+    color: #fff;
+}
+
+.highlight-placeholder:empty::before {
+    content: attr(data-placeholder);
+    color: rgba(253, 224, 71, 0.5);
+}
+
+/* History Section */
+.history-section {
+    margin-top: 1.5rem;
+    border-top: 1px solid var(--panel-border);
+    padding-top: 1.5rem;
+}
+
+.history-item {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-item:hover {
+    border-color: var(--accent-1);
+    background: rgba(0, 0, 0, 0.4);
+    transform: translateX(4px);
+}
+
+.history-item-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+    color: var(--text-primary);
+}
+
+.history-item-date {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+    display: flex !important;
+}
+
+.modal-content {
+    width: 90%;
+    max-width: 500px;
+    transform: translateY(0);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.hidden .modal-content {
+    transform: translateY(-20px);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 1rem;
+}
+
+.modal-body input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 1rem;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.modal-body input:focus {
+    outline: none;
+    border-color: var(--accent-1);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Floating Micro-Tweak Toolbar */
+.floating-toolbar {
+    position: absolute;
+    background: rgba(15, 17, 21, 0.95);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 0.25rem;
+    display: flex;
+    gap: 0.25rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: auto;
+}
+
+.floating-toolbar.hidden {
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+}
+
+.micro-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    padding: 0.4rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+.micro-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.micro-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 

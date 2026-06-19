@@ -7,6 +7,7 @@
     <meta name="description" content="Generate highly tailored, personalized outreach emails and cover letters using AI.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
 </head>
 <body>
     <div class="background-blobs">
@@ -16,6 +17,11 @@
     
     <div class="container">
         <header>
+            <div style="position: absolute; right: 2rem; top: 2rem;">
+                <button id="settings-btn" class="btn-icon" aria-label="Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
+            </div>
             <h1>AI Outreach <span class="highlight">Generator</span></h1>
             <p>Craft personalized cold emails and cover letters in seconds.</p>
         </header>
@@ -84,8 +90,11 @@
             <div class="output-panel glass-panel">
                 <div class="output-header">
                     <h2>Generated Result</h2>
-                    <button id="copy-btn" class="btn-icon" aria-label="Copy to clipboard" disabled>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <button id="copy-btn" class="btn-icon" aria-label="Copy to clipboard" disabled style="display: flex; gap: 0.5rem; padding: 0.5rem 1rem;">
+                        <span id="copy-icon-container" style="display: flex;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </span>
+                        <span id="copy-text" class="hidden" style="color: #10b981; font-weight: 600; font-size: 0.9rem;">Copied!</span>
                     </button>
                 </div>
                 <div id="result-content" class="result-content placeholder">
@@ -96,10 +105,44 @@
                     <button type="button" class="btn-secondary tweak-btn" data-instruction="Make it punchier and more impactful.">💥 Make it Punchier</button>
                     <button type="button" class="btn-secondary tweak-btn" data-instruction="Make it more formal and professional.">👔 More Professional</button>
                 </div>
+                
+                <div id="history-section" class="history-section hidden">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--text-secondary);">Recent Generations</h3>
+                    <div id="history-list">
+                        <!-- History items will be injected here -->
+                    </div>
+                </div>
             </div>
         </main>
     </div>
 
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button id="close-settings-btn" class="btn-icon" aria-label="Close settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="custom-api-key">Gemini API Key</label>
+                    <input type="password" id="custom-api-key" placeholder="Enter your own API key (optional)">
+                    <p class="small-text" style="margin-top: 0.5rem;">Your key is stored securely in your browser's local storage. Leave blank to use the server's default key.</p>
+                </div>
+                <button id="save-settings-btn" class="btn-primary" style="margin-top: 1rem;">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+
+    <!-- Floating Micro-Tweak Toolbar -->
+    <div id="micro-toolbar" class="floating-toolbar hidden">
+        <button class="micro-btn" data-instruction="Make it strictly shorter and more concise.">⚡ Shorter</button>
+        <button class="micro-btn" data-instruction="Make it more formal and professional.">👔 Formal</button>
+        <button class="micro-btn" data-instruction="Make it punchier and more impactful.">🔥 Punchier</button>
+    </div>
 </body>
 </html>

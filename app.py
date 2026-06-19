@@ -1,10 +1,9 @@
 import os
 import re
-from flask import Flask, render_template, request, jsonify
-import google.generativeai as genai
+from flask import Flask, render_template, request, jsonify, Response
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
-import PyPDF2
-import docx
 import requests
 from bs4 import BeautifulSoup
 
@@ -14,27 +13,58 @@ app = Flask(__name__)
 
 # Configure Gemini API
 API_KEY = os.getenv("GEMINI_API_KEY")
-if API_KEY:
-    genai.configure(api_key=API_KEY)
-else:
+if not API_KEY:
     print("Warning: GEMINI_API_KEY not found in environment variables.")
 
-def extract_text_from_pdf(file_stream):
-    try:
-        reader = PyPDF2.PdfReader(file_stream)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text
-    except Exception as e:
-        raise Exception(f"Error reading PDF: {str(e)}")
+def format_error(e):
+    error_str = str(e).lower()
+    if "quota" in error_str or "429" in error_str:
+        return "[ERROR] Quota Exceeded or Rate Limited: Please try again later."
+    elif "api_key" in error_str or "invalid" in error_str or "400" in error_str:
+        return "[ERROR] Invalid API Key: Please check the key in your Settings."
+    elif "503" in error_str or "unavailable" in error_str:
+        return "[ERROR] API is currently overloaded (503). We attempted to retry automatically, but it is still busy. Please try again in a few minutes."
+    return f"[ERROR] Something went wrong: {str(e)}"
 
-def extract_text_from_docx(file_stream):
-    try:
-        doc = docx.Document(file_stream)
-        return "\n".join([para.text for para in doc.paragraphs])
-    except Exception as e:
-        raise Exception(f"Error reading DOCX: {str(e)}")
+import time
+
+def stream_with_retry(client, model, contents, max_retries=3):
+    retries = 0
+    while retries <= max_retries:
+        try:
+            response = client.models.generate_content_stream(
+                model=model,
+                contents=contents
+            )
+            
+            iterator = iter(response)
+            try:
+                first_chunk = next(iterator)
+            except StopIteration:
+                return
+
+            if first_chunk.text:
+                yield first_chunk.text
+            
+            for chunk in iterator:
+                if chunk.text:
+                    yield chunk.text
+                    
+            return
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            if "503" in error_str or "unavailable" in error_str or "429" in error_str:
+                if retries == max_retries:
+                    yield format_error(e)
+                    return
+                retries += 1
+                time.sleep(2 ** retries)
+            else:
+                yield format_error(e)
+                return
+
+
 
 def extract_text_from_url(url):
     try:
@@ -86,17 +116,30 @@ def generate():
         tone = request.form.get('tone', 'Professional')
         output_type = request.form.get('output_type', 'Standard Cold Email')
         cta = request.form.get('cta', 'Default')
+        custom_api_key = request.form.get('custom_api_key', '').strip()
+        
+        if custom_api_key:
+            client = genai.Client(api_key=custom_api_key)
+        elif API_KEY:
+            client = genai.Client(api_key=API_KEY)
+        else:
+            return jsonify({'error': 'No API key provided. Please set one in Settings.'}), 400
         
         # Check for file upload
+        resume_part = None
         if 'resume_file' in request.files:
             file = request.files['resume_file']
             if file.filename != '':
                 if file.filename.endswith('.pdf'):
-                    resume_text = extract_text_from_pdf(file.stream)
+                    mime_type = 'application/pdf'
                 elif file.filename.endswith('.docx'):
-                    resume_text = extract_text_from_docx(file.stream)
+                    mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
                 else:
                     return jsonify({'error': 'Unsupported file format. Please upload a PDF or DOCX file.'}), 400
+                
+                file_bytes = file.read()
+                resume_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+                resume_text = "See attached document."
     else:
         return jsonify({'error': 'Invalid request format.'}), 400
 
@@ -114,8 +157,6 @@ def generate():
         return jsonify({'error': 'Resume and Job Description are required.'}), 400
         
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
         # Adjust prompt based on output_type
         length_instruction = ""
         if "LinkedIn" in output_type:
@@ -153,10 +194,12 @@ CRITICAL SYSTEM INSTRUCTIONS:
 4. The message should directly address how the candidate's actual skills solve the problems outlined in the job description.
 5. Format the output clearly.
 """
-        
-        response = model.generate_content(prompt)
-        
-        return jsonify({'result': response.text})
+        contents_list = []
+        if resume_part:
+            contents_list.append(resume_part)
+        contents_list.append(prompt)
+
+        return Response(stream_with_retry(client, 'gemini-2.5-flash', contents_list), mimetype='text/plain')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -165,13 +208,19 @@ def tweak():
     data = request.json
     original_text = data.get('original_text')
     instruction = data.get('instruction')
+    custom_api_key = data.get('custom_api_key', '').strip()
+    
+    if custom_api_key:
+        client = genai.Client(api_key=custom_api_key)
+    elif API_KEY:
+        client = genai.Client(api_key=API_KEY)
+    else:
+        return jsonify({'error': 'No API key provided. Please set one in Settings.'}), 400
     
     if not original_text or not instruction:
         return jsonify({'error': 'Original text and instruction are required.'}), 400
         
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
         prompt = f"""
 You are an expert editor. Your task is to rewrite the following outreach message according to the specific instruction below.
 
@@ -184,8 +233,41 @@ CRITICAL SYSTEM INSTRUCTIONS:
 ORIGINAL MESSAGE:
 {original_text}
 """
-        response = model.generate_content(prompt)
-        return jsonify({'result': response.text})
+        return Response(stream_with_retry(client, 'gemini-2.5-flash', prompt), mimetype='text/plain')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/micro_tweak', methods=['POST'])
+def micro_tweak():
+    data = request.json
+    snippet = data.get('snippet')
+    instruction = data.get('instruction')
+    custom_api_key = data.get('custom_api_key', '').strip()
+    
+    if custom_api_key:
+        client = genai.Client(api_key=custom_api_key)
+    elif API_KEY:
+        client = genai.Client(api_key=API_KEY)
+    else:
+        return jsonify({'error': 'No API key provided. Please set one in Settings.'}), 400
+    
+    if not snippet or not instruction:
+        return jsonify({'error': 'Snippet and instruction are required.'}), 400
+        
+    try:
+        prompt = f"""
+Rewrite this sentence/snippet according to the instruction while preserving the core facts.
+
+INSTRUCTION: {instruction}
+
+CRITICAL SYSTEM INSTRUCTIONS:
+1. ONLY return the rewritten snippet. Do not include any conversational filler, explanations, or quotes.
+2. Retain any existing bracketed placeholders like [Company Name].
+
+ORIGINAL SNIPPET:
+{snippet}
+"""
+        return Response(stream_with_retry(client, 'gemini-2.5-flash', prompt), mimetype='text/plain')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

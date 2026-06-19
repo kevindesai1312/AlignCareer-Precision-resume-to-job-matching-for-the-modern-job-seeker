@@ -4,17 +4,22 @@ A modern, fast, and highly customizable web application that uses Google's Gemin
 
 ## Features
 
-- **Personalized Outreach**: Write highly contextual emails based on your skills and the job.
+- **Real-Time Streaming**: Watch your cover letter type out in real-time, just like ChatGPT, providing a beautiful user experience without long loading screens.
+- **Secure API Key Management**: Optionally provide your own Gemini API Key directly in the UI via the Settings gear. It's stored securely in your browser's local storage.
 - **Smart Inputs**: 
-  - **Resume Parsing**: Drag and drop your `.pdf` or `.docx` resume directly into the app.
+  - **Native Multimodal Parsing**: Drag and drop your `.pdf` or `.docx` resume directly into the app. It passes files directly to Gemini as a multimodal payload, avoiding text distortion from traditional parsers.
   - **Web Scraping**: Paste a URL to a job listing, and the app will automatically scrape and extract the requirements for you.
 - **Strict Anti-Hallucination**: The AI is strictly instructed to *never* invent skills you don't possess. It will only reference technologies explicitly listed on your resume.
-- **Visual Placeholder Highlighting**: Whenever the AI leaves a bracketed placeholder (like `[Company Name]`), it is highlighted in bright yellow in the UI so you never accidentally send an unfinished email.
-- **One-Click Tweak Variations**: Use the built-in toolbar to instantly rewrite the email ("Make it Shorter", "Make it Punchier", "More Professional") without typing new prompts.
+- **Visual Placeholder Highlighting & Smart Editing**: Whenever the AI leaves a bracketed placeholder (like `[Company Name]`), it is transformed into an interactive, clickable text input directly within the generated email. You can treat the result like a form wizard, filling out the missing details before exporting or copying.
+- **Dynamic Form Wizard (Two-Way Binding)**: When you type into one placeholder block, all other instances of that exact placeholder instantly update across the entire letter in real-time. No more copy-pasting the same company name four times.
+- **Inline "Sentence Rephrasing" (Micro-Tweak)**: Highlight any clunky sentence or phrase in your generated letter to trigger a floating toolbar. You can instantly rewrite just that specific snippet to be Shorter, more Formal, or Punchier using a micro-LLM call seamlessly, without regenerating the whole letter.
+- **One-Click Document Tweak Variations**: Use the built-in toolbar to instantly rewrite the entire email ("Make it Shorter", "Make it Punchier", "More Professional") without typing new prompts.
 - **Adjustable Tone**: Choose between Professional, Enthusiastic, Casual, and Direct tones.
 - **Format Constraints**: Toggle between a Short LinkedIn Connection Request (~300 chars), a Standard Cold Email (~150 words), or a Traditional Cover Letter (full page).
 - **Magic Bullet CTA**: Select exactly how you want to end your email (e.g., asking for a 10-minute chat, requesting a portfolio review).
-- **Beautiful UI**: Features a modern, responsive design with glassmorphism, dynamic background elements, and smooth interactions.
+- **One-Click Copy**: Instantly copy your generated outreach to your clipboard with a single click.
+- **History Log**: Your last 5 generated letters are automatically saved in your browser's local storage so you never lose your work.
+- **Beautiful UI**: Features a modern, responsive design with glassmorphism, dynamic background elements, smooth interactions, and a split-screen desktop layout.
 
 ## Prerequisites
 
@@ -60,6 +65,6 @@ Open your browser and navigate to `http://127.0.0.1:5000` to use the application
 
 ## Tech Stack
 
-- **Backend**: Python, Flask, PyPDF2, python-docx, BeautifulSoup4
-- **Frontend**: HTML5, Vanilla CSS, Vanilla JavaScript
-- **AI Integration**: Google Generative AI (`google-generativeai` package)
+- **Backend**: Python, Flask, BeautifulSoup4
+- **Frontend**: HTML5, Vanilla CSS, Vanilla JavaScript, Server-Sent Chunking
+- **AI Integration**: Google GenAI SDK (`google-genai` package) with Gemini 2.5 Flash natively handling PDF and DOCX documents as multimodal input.

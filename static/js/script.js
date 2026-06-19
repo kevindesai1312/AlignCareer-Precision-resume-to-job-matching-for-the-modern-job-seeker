@@ -11,6 +11,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const dropZone = document.getElementById('drop-zone');
     const resumeTextarea = document.getElementById('resume');
 
+    // Modal & Settings logic
+    const settingsBtn = document.getElementById('settings-btn');
+    const closeSettingsBtn = document.getElementById('close-settings-btn');
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const apiKeyInput = document.getElementById('custom-api-key');
+
+    const savedApiKey = localStorage.getItem('gemini_api_key');
+    if (savedApiKey) {
+        apiKeyInput.value = savedApiKey;
+    }
+
+    settingsBtn.addEventListener('click', () => {
+        settingsModal.classList.remove('hidden');
+    });
+
+    closeSettingsBtn.addEventListener('click', () => {
+        settingsModal.classList.add('hidden');
+    });
+
+    saveSettingsBtn.addEventListener('click', () => {
+        const key = apiKeyInput.value.trim();
+        if (key) {
+            localStorage.setItem('gemini_api_key', key);
+            showToast('API Key saved to browser storage!');
+        } else {
+            localStorage.removeItem('gemini_api_key');
+            showToast('Using default server API Key.');
+        }
+        settingsModal.classList.add('hidden');
+    });
+
     // Drag and Drop functionality
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropZone.addEventListener(eventName, preventDefaults, false);
@@ -77,6 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Use FormData instead of JSON to support file uploads
         const formData = new FormData(form);
+        const storedKey = localStorage.getItem('gemini_api_key');
+        if (storedKey) {
+            formData.append('custom_api_key', storedKey);
+        }
 
         // Validation
         const hasFile = fileInput.files.length > 0;
@@ -100,18 +136,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: formData // Send FormData directly
             });
 
-            const data = await response.json();
-
-            if (response.ok) {
-                resultContent.classList.remove('placeholder');
-                resultContent.innerHTML = formatOutputText(data.result);
-                resultContent.dataset.rawText = data.result;
-                copyBtn.disabled = false;
-                document.getElementById('variations-toolbar').classList.remove('hidden');
-                showToast('Successfully generated!');
-            } else {
+            if (!response.ok) {
+                const data = await response.json();
                 throw new Error(data.error || 'Failed to generate content');
             }
+
+            // Stream reading
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullText = "";
+            resultContent.classList.remove('placeholder');
+            resultContent.innerHTML = ""; // Clear loader text
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                fullText += chunk;
+                
+                // Catch backend-yielded errors
+                if (fullText.startsWith('[ERROR]')) {
+                    throw new Error(fullText.replace('[ERROR]', '').trim());
+                }
+                
+                resultContent.innerHTML = formatOutputText(fullText);
+                resultContent.scrollTop = resultContent.scrollHeight;
+            }
+
+            resultContent.dataset.rawText = fullText;
+            copyBtn.disabled = false;
+            document.getElementById('variations-toolbar').classList.remove('hidden');
+            showToast('Successfully generated!');
+            saveToHistory(fullText, document.getElementById('output-type').value);
         } catch (error) {
             resultContent.classList.add('placeholder');
             resultContent.innerHTML = `<p style="color: var(--error);">Error: ${error.message}</p>`;
@@ -124,8 +180,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function getFinalText() {
+        const clone = resultContent.cloneNode(true);
+        const spans = clone.querySelectorAll('.inline-input');
+        spans.forEach(span => {
+            if (!span.textContent.trim()) {
+                span.textContent = span.getAttribute('data-placeholder');
+            }
+        });
+        
+        let html = clone.innerHTML;
+        html = html.replace(/<br\s*[\/]?>/gi, '\n');
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        return tempDiv.textContent;
+    }
+
     copyBtn.addEventListener('click', async () => {
-        const textToCopy = resultContent.dataset.rawText || resultContent.textContent;
+        const textToCopy = getFinalText();
         if (!textToCopy || copyBtn.disabled) return;
 
         try {
@@ -133,11 +206,18 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Copied to clipboard!');
             
             // Temporary visual feedback on button
-            const originalIcon = copyBtn.innerHTML;
-            copyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+            const copyIconContainer = document.getElementById('copy-icon-container');
+            const copyText = document.getElementById('copy-text');
+            const originalIcon = copyIconContainer.innerHTML;
+            
+            copyIconContainer.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+            copyText.classList.remove('hidden');
+            copyBtn.style.borderColor = '#10b981';
             
             setTimeout(() => {
-                copyBtn.innerHTML = originalIcon;
+                copyIconContainer.innerHTML = originalIcon;
+                copyText.classList.add('hidden');
+                copyBtn.style.borderColor = '';
             }, 2000);
         } catch (err) {
             showToast('Failed to copy text', true);
@@ -154,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, "&#039;");
             
         escapedText = escapedText.replace(/\n/g, '<br>');
-        escapedText = escapedText.replace(/\[.*?\]/g, '<span class="highlight-placeholder">$&</span>');
+        escapedText = escapedText.replace(/\[.*?\]/g, '<span contenteditable="true" class="inline-input highlight-placeholder" data-placeholder="$&">$&</span>');
         return escapedText;
     }
 
@@ -163,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tweakBtns.forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const instruction = e.target.getAttribute('data-instruction');
-            const originalText = resultContent.dataset.rawText;
+            const originalText = getFinalText();
             
             if (!originalText) return;
 
@@ -173,31 +253,234 @@ document.addEventListener('DOMContentLoaded', () => {
             resultContent.classList.add('placeholder');
             
             try {
+                const payload = {
+                    original_text: originalText,
+                    instruction: instruction
+                };
+                const storedKey = localStorage.getItem('gemini_api_key');
+                if (storedKey) {
+                    payload.custom_api_key = storedKey;
+                }
+
                 const response = await fetch('/tweak', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        original_text: originalText,
-                        instruction: instruction
-                    })
+                    body: JSON.stringify(payload)
                 });
 
-                const data = await response.json();
-
-                if (response.ok) {
-                    resultContent.classList.remove('placeholder');
-                    resultContent.innerHTML = formatOutputText(data.result);
-                    resultContent.dataset.rawText = data.result;
-                    showToast('Text updated!');
-                } else {
+                if (!response.ok) {
+                    const data = await response.json();
                     throw new Error(data.error || 'Failed to tweak content');
                 }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = "";
+                resultContent.classList.remove('placeholder');
+                resultContent.innerHTML = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    fullText += chunk;
+                    
+                    if (fullText.startsWith('[ERROR]')) {
+                        throw new Error(fullText.replace('[ERROR]', '').trim());
+                    }
+                    
+                    resultContent.innerHTML = formatOutputText(fullText);
+                    resultContent.scrollTop = resultContent.scrollHeight;
+                }
+
+                resultContent.dataset.rawText = fullText;
+                showToast('Text updated!');
+                saveToHistory(fullText, "Tweaked: " + document.getElementById('output-type').value);
             } catch (error) {
                 resultContent.classList.remove('placeholder');
                 showToast(error.message, true);
             } finally {
                 e.target.textContent = originalBtnText;
                 tweakBtns.forEach(b => b.disabled = false);
+            }
+        });
+    });
+
+    // History Logic
+    function saveToHistory(text, type) {
+        if (!text) return;
+        let history = JSON.parse(localStorage.getItem('letter_history') || '[]');
+        const newItem = {
+            id: Date.now(),
+            text: text,
+            type: type,
+            date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+        };
+        // add to beginning
+        history.unshift(newItem);
+        // keep only last 5
+        if (history.length > 5) {
+            history = history.slice(0, 5);
+        }
+        localStorage.setItem('letter_history', JSON.stringify(history));
+        renderHistory();
+    }
+
+    function renderHistory() {
+        const historySection = document.getElementById('history-section');
+        const historyList = document.getElementById('history-list');
+        let history = JSON.parse(localStorage.getItem('letter_history') || '[]');
+        
+        if (history.length === 0) {
+            historySection.classList.add('hidden');
+            return;
+        }
+        
+        historySection.classList.remove('hidden');
+        historyList.innerHTML = '';
+        
+        history.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'history-item';
+            div.innerHTML = `
+                <div class="history-item-title">${item.type}</div>
+                <div class="history-item-date">${item.date}</div>
+            `;
+            div.addEventListener('click', () => {
+                loadFromHistory(item);
+            });
+            historyList.appendChild(div);
+        });
+    }
+
+    function loadFromHistory(item) {
+        resultContent.classList.remove('placeholder');
+        resultContent.innerHTML = formatOutputText(item.text);
+        resultContent.dataset.rawText = item.text;
+        
+        copyBtn.disabled = false;
+        document.getElementById('variations-toolbar').classList.remove('hidden');
+        showToast('Loaded from history!');
+        
+        // On mobile, scroll to output
+        if (window.innerWidth <= 900) {
+            document.querySelector('.output-panel').scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+
+    // Call renderHistory on load
+    renderHistory();
+
+    // Two-Way Binding for Placeholders
+    resultContent.addEventListener('input', (e) => {
+        if (e.target.classList && e.target.classList.contains('inline-input')) {
+            const placeholder = e.target.getAttribute('data-placeholder');
+            const newValue = e.target.textContent;
+            const siblings = resultContent.querySelectorAll(`.inline-input[data-placeholder="${placeholder}"]`);
+            siblings.forEach(sibling => {
+                if (sibling !== e.target && sibling.textContent !== newValue) {
+                    sibling.textContent = newValue;
+                }
+            });
+        }
+    });
+
+    // Inline Sentence Rephrasing
+    const microToolbar = document.getElementById('micro-toolbar');
+    let currentSelectionRange = null;
+
+    document.addEventListener('selectionchange', () => {
+        const selection = window.getSelection();
+        if (!selection.isCollapsed && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            if (resultContent.contains(range.commonAncestorContainer)) {
+                microToolbar.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    const rect = range.getBoundingClientRect();
+                    microToolbar.style.top = `${window.scrollY + rect.top - 45}px`;
+                    microToolbar.style.left = `${window.scrollX + rect.left + (rect.width / 2) - (microToolbar.offsetWidth / 2)}px`;
+                }, 0);
+                
+                currentSelectionRange = range;
+                return;
+            }
+        }
+        
+        if (document.activeElement && microToolbar.contains(document.activeElement)) return;
+        microToolbar.classList.add('hidden');
+        currentSelectionRange = null;
+    });
+
+    microToolbar.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+    });
+
+    const microBtns = document.querySelectorAll('.micro-btn');
+    microBtns.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            if (!currentSelectionRange) return;
+            
+            const instruction = e.target.getAttribute('data-instruction');
+            const snippet = currentSelectionRange.toString();
+            
+            if (!snippet.trim()) return;
+
+            const originalBtnText = e.target.textContent;
+            e.target.textContent = "⏳";
+            microBtns.forEach(b => b.disabled = true);
+            
+            const streamSpan = document.createElement('span');
+            streamSpan.className = 'streaming-tweak';
+            streamSpan.style.backgroundColor = 'rgba(99, 102, 241, 0.2)';
+            streamSpan.style.borderRadius = '4px';
+            
+            currentSelectionRange.deleteContents();
+            currentSelectionRange.insertNode(streamSpan);
+            
+            microToolbar.classList.add('hidden');
+
+            try {
+                const payload = { snippet: snippet, instruction: instruction };
+                const storedKey = localStorage.getItem('gemini_api_key');
+                if (storedKey) payload.custom_api_key = storedKey;
+
+                const response = await fetch('/micro_tweak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Failed to tweak snippet');
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    fullText += chunk;
+                    
+                    if (fullText.startsWith('[ERROR]')) {
+                        throw new Error(fullText.replace('[ERROR]', '').trim());
+                    }
+                    
+                    streamSpan.innerHTML = formatOutputText(fullText);
+                }
+                
+                streamSpan.style.backgroundColor = 'transparent';
+                
+            } catch (error) {
+                showToast(error.message, true);
+                streamSpan.innerHTML = formatOutputText(snippet);
+            } finally {
+                e.target.textContent = originalBtnText;
+                microBtns.forEach(b => b.disabled = false);
             }
         });
     });
