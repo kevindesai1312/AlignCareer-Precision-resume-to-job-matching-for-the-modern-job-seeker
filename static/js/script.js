@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileNameDisplay = document.getElementById('file-name');
     const dropZone = document.getElementById('drop-zone');
     const resumeTextarea = document.getElementById('resume');
+    const subjectOptionsContainer = document.getElementById('subject-options');
 
     // Modal & Settings logic
     const settingsBtn = document.getElementById('settings-btn');
@@ -129,6 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
         resultContent.innerHTML = '<p class="placeholder">Generating your personalized outreach... This might take a few seconds.</p>';
         resultContent.classList.add('placeholder');
         copyBtn.disabled = true;
+        subjectOptionsContainer.innerHTML = '';
+        subjectOptionsContainer.classList.add('hidden');
 
         try {
             const response = await fetch('/generate', {
@@ -159,7 +162,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error(fullText.replace('[ERROR]', '').trim());
                 }
                 
-                resultContent.innerHTML = formatOutputText(fullText);
+                let bodyText = fullText;
+                if (fullText.includes('[BODY]')) {
+                    const parts = fullText.split('[BODY]');
+                    updateSubjects(parts[0]);
+                    bodyText = parts.slice(1).join('[BODY]').trim();
+                } else if (fullText.includes('[SUBJECT_')) {
+                    updateSubjects(fullText);
+                    bodyText = "Generating subjects...";
+                }
+                
+                resultContent.innerHTML = formatOutputText(bodyText);
                 resultContent.scrollTop = resultContent.scrollHeight;
             }
 
@@ -232,6 +245,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
+            
+        escapedText = escapedText.replace(/&lt;verified&gt;(.*?)&lt;\/verified&gt;/gi, '<span class="verified-skill" title="✓ Verified from your Resume">$1</span>');
+        escapedText = escapedText.replace(/&lt;unverified&gt;(.*?)&lt;\/unverified&gt;/gi, '<span class="unverified-skill" title="⚠ Double check: This word wasn\'t found in your uploaded resume.">$1</span>');
             
         escapedText = escapedText.replace(/\n/g, '<br>');
         escapedText = escapedText.replace(/\[.*?\]/g, '<span contenteditable="true" class="inline-input highlight-placeholder" data-placeholder="$&">$&</span>');
@@ -484,4 +500,58 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    function escapeHtml(unsafe) {
+        if (!unsafe) return "";
+        return unsafe
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;");
+    }
+
+    function updateSubjects(text) {
+        if (!text) return;
+        
+        const lines = text.split('\n');
+        let html = '';
+        
+        lines.forEach(line => {
+            const match = line.match(/\[SUBJECT_(DIRECT|CURIOSITY|VALUE)\](.*)/);
+            if (match) {
+                const typeRaw = match[1];
+                let typeName = 'Option';
+                if (typeRaw === 'DIRECT') typeName = 'The Direct Match';
+                if (typeRaw === 'CURIOSITY') typeName = 'The Curiosity Hook';
+                if (typeRaw === 'VALUE') typeName = 'The Value-First Open';
+                
+                const subject = match[2].trim();
+                
+                html += `
+                <div class="subject-card">
+                    <div class="subject-card-text">
+                        <span class="subject-card-type">${typeName}</span>
+                        ${formatOutputText(subject)}
+                    </div>
+                    <button class="subject-btn" type="button" data-subject="${escapeHtml(subject)}">Click to Apply</button>
+                </div>`;
+            }
+        });
+        
+        if (html) {
+            subjectOptionsContainer.innerHTML = html;
+            subjectOptionsContainer.classList.remove('hidden');
+            
+            subjectOptionsContainer.querySelectorAll('.subject-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const chosenSubject = btn.getAttribute('data-subject');
+                    // Wrap the subject in a styled span so it's clearly the subject line
+                    const subjectHtml = `<strong>Subject:</strong> <span contenteditable="true" class="inline-input highlight-placeholder" data-placeholder="[Subject]">${chosenSubject}</span><br><br>`;
+                    resultContent.innerHTML = subjectHtml + resultContent.innerHTML;
+                    subjectOptionsContainer.classList.add('hidden');
+                };
+            });
+        }
+    }
 });

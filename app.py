@@ -185,14 +185,20 @@ JOB DESCRIPTION:
 {job_description_text}
 
 CANDIDATE'S RESUME:
+(See attached document or pasted text below)
 {resume_text}
 
 CRITICAL SYSTEM INSTRUCTIONS:
 1. NEVER hallucinate or invent skills, experiences, degrees, or technologies. You must ONLY mention skills explicitly listed in the CANDIDATE'S RESUME.
 2. If there is a missing piece of information (e.g., you don't know the Hiring Manager's Name or the Company Name), you MUST use a placeholder in brackets, exactly like [Company Name] or [Hiring Manager]. Do not guess or invent names.
-3. Write a compelling subject line (unless it's a LinkedIn request).
-4. The message should directly address how the candidate's actual skills solve the problems outlined in the job description.
-5. Format the output clearly.
+3. SUBJECT LINES: You MUST provide 3 distinct subject lines using different psychological hooks BEFORE the email body. Use EXACTLY this format:
+[SUBJECT_DIRECT] Your direct match subject line here
+[SUBJECT_CURIOSITY] Your curiosity hook subject line here
+[SUBJECT_VALUE] Your value-first open subject line here
+[BODY]
+4. VERACITY CHECK: Whenever you mention a specific technical skill, tool, or methodology in the [BODY], you MUST wrap it in `<verified>skill name</verified>` if it is explicitly listed on the resume, or `<unverified>skill name</unverified>` if you inferred it or it is NOT explicitly on the resume.
+5. The message should directly address how the candidate's actual skills solve the problems outlined in the job description.
+6. Format the output clearly without conversational filler.
 """
         contents_list = []
         if resume_part:
