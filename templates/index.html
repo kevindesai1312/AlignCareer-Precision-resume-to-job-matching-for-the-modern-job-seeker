@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Cover Letter & Cold Email Generator</title>
+    <meta name="description" content="Generate highly tailored, personalized outreach emails and cover letters using AI.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+    
+    <div class="container">
+        <header>
+            <h1>AI Outreach <span class="highlight">Generator</span></h1>
+            <p>Craft personalized cold emails and cover letters in seconds.</p>
+        </header>
+
+        <main class="grid-layout">
+            <div class="input-panel glass-panel">
+                <form id="generator-form">
+                    
+                    <div class="form-group">
+                        <label>Your Resume / Profile</label>
+                        <div class="file-upload-wrapper" id="drop-zone">
+                            <input type="file" id="resume-file" name="resume_file" accept=".pdf,.docx" class="file-input">
+                            <div class="file-upload-design">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                <p>Drag & Drop your Resume (.pdf, .docx)<br><span class="small-text">or click to browse</span></p>
+                                <span id="file-name" class="file-name"></span>
+                            </div>
+                        </div>
+                        <div class="divider"><span>OR PASTE TEXT</span></div>
+                        <textarea id="resume" name="resume" placeholder="Paste your resume, LinkedIn summary, or key skills here..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="job-description">Target Job Description</label>
+                        <textarea id="job-description" name="job_description" placeholder="Paste a Job Posting URL (e.g., LinkedIn, Indeed) OR paste the job description text..." required></textarea>
+                    </div>
+
+                    <div class="row-group">
+                        <div class="form-group half-width">
+                            <label for="output-type">Output Format</label>
+                            <select id="output-type" name="output_type">
+                                <option value="Standard Cold Email">Standard Cold Email (~150 words)</option>
+                                <option value="Short LinkedIn Connection Request">LinkedIn Request (~300 chars)</option>
+                                <option value="Traditional Cover Letter">Cover Letter (Full page)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group half-width">
+                            <label for="tone">Tone</label>
+                            <select id="tone" name="tone">
+                                <option value="Professional">Professional & Polished</option>
+                                <option value="Enthusiastic">Enthusiastic & Passionate</option>
+                                <option value="Casual">Casual & Approachable</option>
+                                <option value="Direct">Direct & Concise (Sales)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cta">Call to Action (Magic Bullet)</label>
+                        <select id="cta" name="cta">
+                            <option value="Default">Let AI Decide</option>
+                            <option value="Ask for a 10-minute chat to discuss the role">Ask for a 10-minute chat</option>
+                            <option value="Request a quick review of my portfolio">Request a portfolio review</option>
+                            <option value="Direct application follow-up (checking on status)">Direct application follow-up</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" id="generate-btn" class="btn-primary">
+                        <span class="btn-text">Generate Outreach</span>
+                        <div class="spinner hidden" id="loading-spinner"></div>
+                    </button>
+                </form>
+            </div>
+
+            <div class="output-panel glass-panel">
+                <div class="output-header">
+                    <h2>Generated Result</h2>
+                    <button id="copy-btn" class="btn-icon" aria-label="Copy to clipboard" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                </div>
+                <div id="result-content" class="result-content placeholder">
+                    <p>Your AI-generated email will appear here.</p>
+                </div>
+                <div id="variations-toolbar" class="variations-toolbar hidden">
+                    <button type="button" class="btn-secondary tweak-btn" data-instruction="Make it strictly shorter and more concise.">✨ Make it Shorter</button>
+                    <button type="button" class="btn-secondary tweak-btn" data-instruction="Make it punchier and more impactful.">💥 Make it Punchier</button>
+                    <button type="button" class="btn-secondary tweak-btn" data-instruction="Make it more formal and professional.">👔 More Professional</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
