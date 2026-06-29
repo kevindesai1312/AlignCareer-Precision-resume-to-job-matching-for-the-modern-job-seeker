@@ -64,7 +64,24 @@ def stream_with_retry(client, model, contents, max_retries=3):
                 yield format_error(e)
                 return
 
-
+def generate_with_retry_sync(client, model, contents, max_retries=3):
+    retries = 0
+    while retries <= max_retries:
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=contents
+            )
+            return response.text
+        except Exception as e:
+            error_str = str(e).lower()
+            if "503" in error_str or "unavailable" in error_str or "429" in error_str:
+                if retries == max_retries:
+                    raise Exception(format_error(e))
+                retries += 1
+                time.sleep(2 ** retries)
+            else:
+                raise Exception(format_error(e))
 
 def extract_text_from_url(url):
     try:
@@ -191,11 +208,16 @@ CANDIDATE'S RESUME:
 CRITICAL SYSTEM INSTRUCTIONS:
 1. NEVER hallucinate or invent skills, experiences, degrees, or technologies. You must ONLY mention skills explicitly listed in the CANDIDATE'S RESUME.
 2. If there is a missing piece of information (e.g., you don't know the Hiring Manager's Name or the Company Name), you MUST use a placeholder in brackets, exactly like [Company Name] or [Hiring Manager]. Do not guess or invent names.
-3. SUBJECT LINES: You MUST provide 3 distinct subject lines using different psychological hooks BEFORE the email body. Use EXACTLY this format:
+3. SUBJECT LINES AND HOOKS: You MUST provide 3 distinct subject lines AND 3 distinct opening lines (hooks) BEFORE the email body. Use EXACTLY this format:
 [SUBJECT_DIRECT] Your direct match subject line here
 [SUBJECT_CURIOSITY] Your curiosity hook subject line here
 [SUBJECT_VALUE] Your value-first open subject line here
+[HOOK_CONNECTION] Your mutual connection opening line here
+[HOOK_NEWS] Your recent company news opening line here
+[HOOK_PAIN] Your direct pain-point opening line here
 [BODY]
+
+IMPORTANT: In the [BODY], you MUST include the exact text `[OPENING_LINE]` right after the greeting (e.g., right after 'Dear [Hiring Manager],'). Do not write an opening line yourself in the body, just put `[OPENING_LINE]` and continue with the rest of the message.
 4. VERACITY CHECK: Whenever you mention a specific technical skill, tool, or methodology in the [BODY], you MUST wrap it in `<verified>skill name</verified>` if it is explicitly listed on the resume, or `<unverified>skill name</unverified>` if you inferred it or it is NOT explicitly on the resume.
 5. The message should directly address how the candidate's actual skills solve the problems outlined in the job description.
 6. Format the output clearly without conversational filler.
@@ -205,7 +227,45 @@ CRITICAL SYSTEM INSTRUCTIONS:
             contents_list.append(resume_part)
         contents_list.append(prompt)
 
-        return Response(stream_with_retry(client, 'gemini-2.5-flash', contents_list), mimetype='text/plain')
+        # Step 1: Writer Agent generates initial draft
+        initial_draft = generate_with_retry_sync(client, 'gemini-2.5-flash', contents_list)
+
+        # Step 2: Critic Agent reviews the draft
+        critic_prompt = f"""
+You are an expert editor and critic. Review the following draft outreach message.
+Check for the following constraints:
+1. No hallucinations (skills, experiences, or names not explicitly in the resume).
+2. Proper use of bracketed placeholders (e.g., [Company Name], [Hiring Manager]) where information is missing.
+3. Tone matches the requested tone: {tone}.
+4. Appropriate length for format: {output_type}.
+5. Correct inclusion of the specific Call-to-Action if requested.
+6. The use of `<verified>` and `<unverified>` tags for technical skills.
+
+If the draft is perfect, just say "Looks good."
+Otherwise, provide concise, specific feedback on what needs to be changed.
+
+DRAFT TO REVIEW:
+{initial_draft}
+"""
+        feedback = generate_with_retry_sync(client, 'gemini-2.5-flash', critic_prompt)
+
+        # Step 3: Reviser Agent produces final output (streamed)
+        reviser_prompt = f"""
+You are an expert copywriter. You previously wrote a draft outreach message.
+An editor has reviewed your draft and provided feedback.
+
+ORIGINAL DRAFT:
+{initial_draft}
+
+EDITOR FEEDBACK:
+{feedback}
+
+Rewrite the outreach message to incorporate the editor's feedback and fix any issues.
+Ensure you strictly follow all original constraints (especially regarding placeholders and `<verified>`/`<unverified>` tags).
+Only output the final outreach message. Do not include conversational filler or explain your changes.
+"""
+
+        return Response(stream_with_retry(client, 'gemini-2.5-flash', reviser_prompt), mimetype='text/plain')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -272,6 +332,39 @@ CRITICAL SYSTEM INSTRUCTIONS:
 
 ORIGINAL SNIPPET:
 {snippet}
+"""
+        return Response(stream_with_retry(client, 'gemini-2.5-flash', prompt), mimetype='text/plain')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/autocomplete', methods=['POST'])
+def autocomplete():
+    data = request.json
+    context_before = data.get('context_before', '')
+    context_after = data.get('context_after', '')
+    job_description = data.get('job_description', '')
+    custom_api_key = data.get('custom_api_key', '').strip()
+    
+    if custom_api_key:
+        client = genai.Client(api_key=custom_api_key)
+    elif API_KEY:
+        client = genai.Client(api_key=API_KEY)
+    else:
+        return jsonify({'error': 'No API key provided.'}), 400
+        
+    try:
+        prompt = f"""
+You are an AI writing assistant. Complete the user's sentence based on the context.
+Return ONLY the completion text. Do not repeat the context before or after.
+Keep it very brief (a few words to a sentence), natural, and matching the tone of the surrounding text.
+If applicable, make it relevant to the following job description:
+{job_description}
+
+TEXT BEFORE CURSOR:
+{context_before}
+
+TEXT AFTER CURSOR:
+{context_after}
 """
         return Response(stream_with_retry(client, 'gemini-2.5-flash', prompt), mimetype='text/plain')
     except Exception as e:

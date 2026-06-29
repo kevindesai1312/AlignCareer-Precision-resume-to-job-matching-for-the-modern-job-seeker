@@ -98,7 +98,8 @@
                     </button>
                 </div>
                 <div id="subject-options" class="subject-options hidden"></div>
-                <div id="result-content" class="result-content placeholder">
+                <div id="hook-options" class="hook-options hidden"></div>
+                <div id="result-content" class="result-content placeholder" contenteditable="true">
                     <p>Your AI-generated email will appear here.</p>
                 </div>
                 <div id="variations-toolbar" class="variations-toolbar hidden">
@@ -107,10 +108,23 @@
                     <button type="button" class="btn-secondary tweak-btn" data-instruction="Make it more formal and professional.">👔 More Professional</button>
                 </div>
                 
-                <div id="history-section" class="history-section hidden">
-                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--text-secondary);">Recent Generations</h3>
-                    <div id="history-list">
-                        <!-- History items will be injected here -->
+                <div id="deliverability-panel" class="deliverability-panel hidden">
+                    <div class="deliverability-header">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                        <span>Spam / Deliverability Warnings</span>
+                    </div>
+                    <ul id="deliverability-list" class="deliverability-list"></ul>
+                </div>
+            </div>
+
+            <div id="history-panel" class="history-panel glass-panel">
+                <div class="history-header">
+                    <h2>Recent Generations</h2>
+                </div>
+                <div id="history-list" class="history-list">
+                    <div class="placeholder" id="history-placeholder" style="text-align: center; margin-top: 2rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5;"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <p>No recent generations</p>
                     </div>
                 </div>
             </div>

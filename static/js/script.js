@@ -132,6 +132,9 @@ document.addEventListener('DOMContentLoaded', () => {
         copyBtn.disabled = true;
         subjectOptionsContainer.innerHTML = '';
         subjectOptionsContainer.classList.add('hidden');
+        const hookOptionsContainer = document.getElementById('hook-options');
+        hookOptionsContainer.innerHTML = '';
+        hookOptionsContainer.classList.add('hidden');
 
         try {
             const response = await fetch('/generate', {
@@ -166,10 +169,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (fullText.includes('[BODY]')) {
                     const parts = fullText.split('[BODY]');
                     updateSubjects(parts[0]);
+                    updateHooks(parts[0]);
                     bodyText = parts.slice(1).join('[BODY]').trim();
-                } else if (fullText.includes('[SUBJECT_')) {
+                } else if (fullText.includes('[SUBJECT_') || fullText.includes('[HOOK_')) {
                     updateSubjects(fullText);
-                    bodyText = "Generating subjects...";
+                    updateHooks(fullText);
+                    bodyText = "Generating subjects and hooks...";
                 }
                 
                 resultContent.innerHTML = formatOutputText(bodyText);
@@ -237,6 +242,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const spamWords = [
+        "100% free", "act now", "apply now", "bargain", "bonus", "click here", "dear friend", 
+        "double your", "earn money", "free access", "free gift", "guaranteed", "no catch", 
+        "no hidden costs", "once in a lifetime", "promise", "risk free", "special promotion", 
+        "urgent", "winner"
+    ];
+
     // Formatting function for placeholders
     function formatOutputText(rawText) {
         let escapedText = rawText
@@ -248,10 +260,35 @@ document.addEventListener('DOMContentLoaded', () => {
             
         escapedText = escapedText.replace(/&lt;verified&gt;(.*?)&lt;\/verified&gt;/gi, '<span class="verified-skill" title="✓ Verified from your Resume">$1</span>');
         escapedText = escapedText.replace(/&lt;unverified&gt;(.*?)&lt;\/unverified&gt;/gi, '<span class="unverified-skill" title="⚠ Double check: This word wasn\'t found in your uploaded resume.">$1</span>');
+        
+        let currentWarnings = [];
+        spamWords.forEach(word => {
+            const regex = new RegExp(`\\b(${word})\\b`, 'gi');
+            if (regex.test(escapedText)) {
+                escapedText = escapedText.replace(regex, '<span class="spam-highlight" title="Deliverability Warning: $1">$1</span>');
+                currentWarnings.push(word);
+            }
+        });
+
+        updateDeliverabilityPanel(currentWarnings);
             
         escapedText = escapedText.replace(/\n/g, '<br>');
         escapedText = escapedText.replace(/\[.*?\]/g, '<span contenteditable="true" class="inline-input highlight-placeholder" data-placeholder="$&">$&</span>');
         return escapedText;
+    }
+
+    function updateDeliverabilityPanel(warnings) {
+        const panel = document.getElementById('deliverability-panel');
+        const list = document.getElementById('deliverability-list');
+        if (!panel || !list) return;
+
+        if (warnings.length > 0) {
+            panel.classList.remove('hidden');
+            list.innerHTML = warnings.map(w => `<li>Avoid using <strong>"${w}"</strong> as it often triggers spam filters.</li>`).join('');
+        } else {
+            panel.classList.add('hidden');
+            list.innerHTML = '';
+        }
     }
 
     // Tweak logic
@@ -343,17 +380,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderHistory() {
-        const historySection = document.getElementById('history-section');
         const historyList = document.getElementById('history-list');
+        const historyPlaceholder = document.getElementById('history-placeholder');
         let history = JSON.parse(localStorage.getItem('letter_history') || '[]');
         
+        // Clear current items, but keep placeholder
+        const items = historyList.querySelectorAll('.history-item');
+        items.forEach(item => item.remove());
+        
         if (history.length === 0) {
-            historySection.classList.add('hidden');
+            if (historyPlaceholder) historyPlaceholder.classList.remove('hidden');
             return;
         }
         
-        historySection.classList.remove('hidden');
-        historyList.innerHTML = '';
+        if (historyPlaceholder) historyPlaceholder.classList.add('hidden');
         
         history.forEach(item => {
             const div = document.createElement('div');
@@ -553,5 +593,143 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
             });
         }
+    }
+
+    function updateHooks(text) {
+        if (!text) return;
+        
+        const lines = text.split('\n');
+        let html = '';
+        
+        lines.forEach(line => {
+            const match = line.match(/\[HOOK_(CONNECTION|NEWS|PAIN)\](.*)/);
+            if (match) {
+                const typeRaw = match[1];
+                let typeName = 'Hook';
+                if (typeRaw === 'CONNECTION') typeName = 'Mutual Connection';
+                if (typeRaw === 'NEWS') typeName = 'Company News';
+                if (typeRaw === 'PAIN') typeName = 'Direct Pain-Point';
+                
+                const hook = match[2].trim();
+                
+                html += `
+                <div class="subject-card hook-card">
+                    <div class="subject-card-text">
+                        <span class="subject-card-type">${typeName}</span>
+                        ${formatOutputText(hook)}
+                    </div>
+                    <button class="subject-btn hook-btn" type="button" data-hook="${escapeHtml(hook)}">Use Hook</button>
+                </div>`;
+            }
+        });
+        
+        const hookOptionsContainer = document.getElementById('hook-options');
+        if (html && hookOptionsContainer) {
+            hookOptionsContainer.innerHTML = html;
+            hookOptionsContainer.classList.remove('hidden');
+            
+            hookOptionsContainer.querySelectorAll('.hook-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const chosenHook = btn.getAttribute('data-hook');
+                    const placeholders = resultContent.querySelectorAll('.inline-input');
+                    let found = false;
+                    placeholders.forEach(p => {
+                        if (p.getAttribute('data-placeholder') === '[OPENING_LINE]') {
+                            p.textContent = chosenHook;
+                            p.classList.remove('highlight-placeholder');
+                            p.classList.remove('inline-input');
+                            found = true;
+                        }
+                    });
+                    if (!found) {
+                        resultContent.innerHTML = formatOutputText(chosenHook) + "<br><br>" + resultContent.innerHTML;
+                    }
+                    hookOptionsContainer.classList.add('hidden');
+                };
+            });
+        }
+    }
+
+    resultContent.addEventListener('keydown', async (e) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+            
+            const range = selection.getRangeAt(0);
+            const node = range.commonAncestorContainer;
+            
+            if (!resultContent.contains(node)) return;
+
+            const streamSpan = document.createElement('span');
+            streamSpan.className = 'autocomplete-stream';
+            streamSpan.style.color = '#10b981';
+            streamSpan.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+            range.insertNode(streamSpan);
+
+            let contextBefore = "";
+            let contextAfter = "";
+            
+            if (node.nodeType === 3) {
+                contextBefore = node.textContent.slice(0, range.startOffset);
+                contextAfter = node.textContent.slice(range.startOffset);
+            } else {
+                contextBefore = node.textContent;
+            }
+
+            try {
+                const payload = {
+                    context_before: contextBefore,
+                    context_after: contextAfter,
+                    job_description: document.getElementById('job-description').value
+                };
+                const storedKey = localStorage.getItem('gemini_api_key');
+                if (storedKey) payload.custom_api_key = storedKey;
+
+                const response = await fetch('/autocomplete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error('Autocomplete failed');
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                let completion = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    completion += chunk;
+                    streamSpan.textContent = completion;
+                }
+                
+                const textNode = document.createTextNode(completion);
+                streamSpan.parentNode.replaceChild(textNode, streamSpan);
+                
+                const newRange = document.createRange();
+                newRange.setStart(textNode, textNode.length);
+                newRange.setEnd(textNode, textNode.length);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+                
+            } catch (error) {
+                showToast(error.message, true);
+                streamSpan.remove();
+            }
+        }
+    });
+
+    // Auto-populate job description from URL if present (Chrome Extension Bridge)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('job_text')) {
+        document.getElementById('job-description').value = urlParams.get('job_text');
+        showToast('Job description populated from URL!');
+    } else if (urlParams.has('job_url')) {
+        document.getElementById('job-description').value = urlParams.get('job_url');
+        showToast('Job URL populated!');
     }
 });
