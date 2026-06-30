@@ -1,6 +1,6 @@
-# AI Cover Letter & Cold Email Generator
+# AlignCareer — AI Cover Letter & Outreach Generator | Python, Flask, Vanilla CSS/JS, Gemini AI | [Project]
 
-A modern, fast, and highly customizable web application that uses Google's Gemini AI to automatically generate personalized cold emails and cover letters. Built with Python, Flask, and Vanilla CSS/JS.
+AlignCareer is a modern, fast web application that leverages Google's Gemini AI to generate highly contextual cover letters, cold emails, and LinkedIn outreach by precisely matching a candidate's resume to a target job description. Built with Python, Flask, and Vanilla CSS/JS.
 
 ## Features
 
